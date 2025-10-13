@@ -85,6 +85,166 @@ colnames(mean_hour) = c("Product", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sa
 
 knitr::kable(mean_hour, digits = 2, caption = "Mean Hour of Purchase by Day of Week")
 ```
+Pink Lady Apples are typically ordered earlier in the day (late morning to early afternoon). Coffee Ice Cream is often ordered later in the day (afternoon to evening). This pattern likely reflects typical consumption timing—fresh fruit as part of meals versus dessert treats in the evening.
+
+## Problem 2
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(knitr)
+
+# paths
+zori_path <- "/Users/caiyilin/Desktop/p8105_hw3_yc4804/zillow_data/Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv"
+map_path  <- "/Users/caiyilin/Desktop/p8105_hw3_yc4804/zillow_data/Zip Codes.csv"
+
+zori_raw <- readr::read_csv(zori_path, show_col_types = FALSE, name_repair = "minimal")
+zip_map  <- readr::read_csv(map_path,  show_col_types = FALSE)
+
+# columns in your files
+zip_col_zillow <- "RegionName"   # ZIP in Zillow file
+zip_col_map    <- "ZipCode"      # ZIP in mapping file
+boro_col_map   <- "County"       # USE ORIGINAL COUNTY — NO RECODING
+
+# monthly columns like "YYYY-MM" or "YYYY-MM-DD"
+date_cols <- names(zori_raw)[grepl("^\\d{4}-\\d{2}(-\\d{2})?$", names(zori_raw))]
+
+# long format + parse date
+zori_long <- zori_raw |>
+  pivot_longer(all_of(date_cols), names_to = "month_header", values_to = "zori") |>
+  mutate(
+    date = ymd(month_header, quiet = TRUE),
+    date = if_else(is.na(date), ym(month_header, quiet = TRUE), date),
+    zip  = str_pad(.data[[zip_col_zillow]] |> as.character(), 5, pad = "0")
+  ) |>
+  select(zip, date, zori) |>
+  filter(!is.na(date)) |>
+  filter(date >= ymd("2015-01-01"), date <= ymd("2024-08-31")) |>
+  mutate(year = year(date))
+
+# attach ORIGINAL county labels; keep them in a column named "borough"
+zip_map_small <- zip_map |>
+  transmute(
+    zip     = str_pad(.data[[zip_col_map]] |> as.character(), 5, pad = "0"),
+    borough = .data[[boro_col_map]] |> as.character()     # <- original County values (e.g., Kings)
+  )
+
+zori_long <- zori_long |>
+  left_join(zip_map_small, by = "zip") |>
+  mutate(
+    # optional: order by county names rather than borough names
+    borough = factor(borough, levels = c("New York","Kings","Queens","Bronx","Richmond"))
+  ) |>
+  select(zip, date, zori, year, borough)
+
+view(zori_long)
+
+```
+
+```{r}
+
+#Q1: Coverage counts across Jan 2015–Aug 2024 (116 months)
+coverage <- zori_long %>%
+  mutate(has_obs = !is.na(zori)) %>%
+  group_by(zip) %>%
+  summarize(n_months = sum(has_obs), .groups = "drop")
+
+n_full_116 <- sum(coverage$n_months == 116, na.rm = TRUE)
+n_lt_10    <- sum(coverage$n_months < 10,  na.rm = TRUE)
+
+cat("ZIPs observed 116 times:", n_full_116, "\n")
+cat("ZIPs observed < 10 times:", n_lt_10, "\n")
+
+```
+
+```{r}
+#Q2) Reader-friendly table: average rental price by county*year
+library(knitr)
+
+avg_boro_year <- zori_long |>
+  filter(!is.na(zori), !is.na(borough)) |>
+  group_by(borough, year) |>
+  summarise(mean_zori = round(mean(zori, na.rm = TRUE), 0), .groups = "drop") |>
+  mutate(borough = factor(borough, levels = c("New York","Kings","Queens","Bronx","Richmond"))) |>
+  arrange(borough, year) |>
+  tidyr::pivot_wider(names_from = year, values_from = mean_zori)
+
+kable(avg_boro_year, caption = "Average ZORI ($) by County and Year", align = "c")
+
+
+```
+```{r}
+
+#Q3) Plot: NYC rental prices over time (facilitates county comparisons)
+library(ggplot2)
+
+# Use monthly county medians for clarity with many ZIPs
+boro_month_median <- zori_long |>
+  filter(!is.na(zori), !is.na(borough)) |>
+  group_by(borough, date) |>
+  summarise(median_zori = median(zori, na.rm = TRUE), .groups = "drop") |>
+  mutate(borough = factor(borough, levels = c("New York","Kings","Queens","Bronx","Richmond")))
+
+p1 <- ggplot(boro_month_median, aes(date, median_zori, color = borough)) +
+  geom_line(linewidth = 1) +
+  labs(
+    title = "NYC Rental Prices (ZORI): County Medians Over Time",
+    x = NULL, y = "ZORI (USD)", color = "County"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+p1
+
+# Comment: 
+# Clear separation persists (New York > Kings > Queens > Bronx/Richmond) with a notable post-2021 rise.
+
+```
+```{r}
+#Q4) 2023 ZIP-level averages + distribution plot across counties
+county_order <- c("New York","Kings","Queens","Bronx","Richmond")
+
+zip_2023_avg <- zori_long %>%
+  filter(year == 2023, !is.na(zori), !is.na(borough)) %>%
+  group_by(borough, zip) %>%
+  summarise(avg_2023 = mean(zori, na.rm = TRUE), .groups = "drop") %>%
+  mutate(borough = factor(borough, levels = county_order))
+
+# Reader-friendly distribution plot across boroughs
+p_zip_dist_2023 <- ggplot(zip_2023_avg, aes(borough, avg_2023)) +
+  geom_violin(trim = FALSE, alpha = 0.25, linewidth = 0.2) +
+  geom_boxplot(width = 0.18, outlier.alpha = 0.25) +
+  stat_summary(fun = "mean", geom = "point", shape = 21, size = 2.2, fill = "white") +
+  scale_y_continuous(labels = label_dollar()) +
+  labs(
+    title = "Distribution of ZIP-level Average Rental Price in 2023 by County",
+    x = "County (NYC)",
+    y = "Average ZORI in 2023 (USD)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+
+p_zip_dist_2023
+# Comment:
+# New York (Manhattan) and Kings (Brooklyn) have the highest medians and widest upper tails, indicating more expensive and variable ZIPs; Queens is intermediate; Bronx and Richmond (Staten Island) show lower medians and tighter spreads.
+
+```
+
+```{r}
+#Q5: combine two plots
+dir.create("problem 2 results", showWarnings = FALSE)
+library(patchwork)
+
+combined <- p1 /p_zip_dist_2023 + plot_layout(heights = c(2, 1.3))
+combined
+ggsave("problem 2 results/combined_plots.png", combined, width = 10, height = 10, dpi = 300)
+ggsave("problem 2 results/zori_county_median_over_time.png", p1, width = 10, height = 6, dpi = 300)
+ggsave("problem 2 results/zori_2023_zip_distribution_by_county.png", p_zip_dist_2023, width = 9, height = 5, dpi = 300)
+
+cat("Saved to problem 2 results/: combined_plots.png, zori_county_median_over_time.png, zori_2023_zip_distribution_by_county.png\n")
+
+```
 
 
 
