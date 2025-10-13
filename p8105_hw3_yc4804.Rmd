@@ -215,8 +215,7 @@ zip_2023_avg <- zori_long %>%
 p_zip_dist_2023 <- ggplot(zip_2023_avg, aes(borough, avg_2023)) +
   geom_violin(trim = FALSE, alpha = 0.25, linewidth = 0.2) +
   geom_boxplot(width = 0.18, outlier.alpha = 0.25) +
-  stat_summary(fun = "mean", geom = "point", shape = 21, size = 2.2, fill = "white") +
-  scale_y_continuous(labels = label_dollar()) +
+  stat_summary(fun = "mean", geom = "point", shape = 21, size = 2.2, fill = "red")  +
   labs(
     title = "Distribution of ZIP-level Average Rental Price in 2023 by County",
     x = "County (NYC)",
@@ -247,4 +246,163 @@ cat("Saved to problem 2 results/: combined_plots.png, zori_county_median_over_ti
 ```
 
 
+## Problem 3
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(hms)
 
+accel_path <- "/Users/caiyilin/Desktop/p8105_hw3_yc4804/problem_3_data/nhanes_accel.csv"  
+covar_path <- "/Users/caiyilin/Desktop/p8105_hw3_yc4804/problem_3_data/nhanes_covar.csv"   
+
+accel_raw <- readr::read_csv(accel_path, show_col_types = FALSE)
+covar_raw <- readr::read_csv(
+  "/Users/caiyilin/Desktop/p8105_hw3_yc4804/problem_3_data/nhanes_covar.csv",
+  skip = 4,                 # <- use the 5th row as the header
+  show_col_types = FALSE
+)
+
+# ---- Recode demographics with reasonable classes ----
+covar <- covar_raw |>
+  mutate(
+    # sex: 1 = male, 2 = female (from your legend)
+    sex = case_when(
+      sex == 1 ~ "Male",
+      sex == 2 ~ "Female",
+      TRUE ~ NA_character_
+    ),
+    sex = factor(sex, levels = c("Female", "Male")),
+
+    # age numeric integer
+    age = as.integer(age),
+
+    # bmi numeric
+    BMI = as.numeric(BMI),
+
+    # education: 1 < HS, 2 HS equivalent, 3 > HS  (ordered)
+    education = case_when(
+      education == 1 ~ "< High school",
+      education == 2 ~ "High school equivalent",
+      education == 3 ~ "More than high school",
+      TRUE ~ NA_character_
+    ),
+    education = factor(education,
+                       levels = c("< High school", "High school equivalent", "More than high school"),
+                       ordered = TRUE)
+  )
+
+# ---- Exclude: age < 21, AND any missing demographic values ----
+demo_cols <- c("sex","age","BMI","education")
+covar_clean <- covar |>
+  drop_na(all_of(demo_cols)) |>
+  filter(age >= 21)
+
+# ---- Tidy accelerometer to long: one row per person–minute ----
+minute_cols <- names(accel_raw)[stringr::str_detect(names(accel_raw), "^min\\d+$")]
+
+accel_long <- accel_raw |>
+  select(SEQN, all_of(minute_cols)) |>
+  pivot_longer(
+    cols = all_of(minute_cols),
+    names_to  = "minute_var",     # e.g., "min537"
+    values_to = "MIMS"
+  ) |>
+  mutate(
+    minute     = readr::parse_number(minute_var),   # 1..1440
+    .after = SEQN
+  ) |>
+  select(-minute_var)
+
+# ---- Merge (inner join = participants present in both) ----
+nhanes_long <- accel_long |>
+  inner_join(covar_clean, by = "SEQN") |>
+  arrange(SEQN, minute)
+
+view(nhanes_long)
+
+# Objects you can use:
+#   nhanes_long: tidy dataset with columns
+#     seqn, minute, time_of_day, mims, sex, age, bmi, education
+
+
+```
+
+```{r}
+
+#Question 1: Table: men/women per education + age distributions by sex within education
+library(dplyr)
+library(ggplot2)
+library(knitr)
+
+## Counts table (reader-friendly)
+sex_ed_counts <- nhanes_long %>%
+  distinct(SEQN, sex, education) %>%     # one row per participant
+  count(education, sex) %>%
+  tidyr::pivot_wider(names_from = sex, values_from = n, values_fill = 0) %>%
+  arrange(education)
+
+kable(sex_ed_counts,
+      caption = "Number of Men and Women by Education Category",
+      align = "c")
+
+## Age distributions (density) by sex within education
+age_dist <- nhanes_long %>%
+  distinct(SEQN, age, sex, education) %>%
+  mutate(education = droplevels(education))
+
+ggplot(age_dist, aes(x = age, fill = sex)) +
+  geom_density(alpha = 0.35, adjust = 1.0, color = NA) +
+  facet_wrap(~ education, nrow = 1, scales = "free_y") +
+  scale_fill_discrete(name = "Sex") +
+  labs(title = "Age Distributions by Education and Sex",
+       x = "Age (years)", y = "Density") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top")
+
+```
+A quick read of the figure shows clear age shifts across education levels. In the < high school group, both men and women skew older, with most density in the late 60s–70s. The high school equivalent group is broader; men look slightly bimodal (30s and 60s), while women lean older (mid-50s to 70s). In more than high school, women skew younger with a prominent peak in the 30s, whereas men are more evenly spread into later adulthood. Despite these shifts, the sexes overlap substantially within each education category.
+
+```{r}
+# Question 2: Total activity per participant
+## Total activity = sum of minute-level MIMS across the day (per participant)
+total_activity <- nhanes_long %>%
+  group_by(SEQN, sex, age, education) %>%
+  summarise(total_mims = sum(MIMS, na.rm = TRUE), .groups = "drop")
+
+## Scatter + smooth (compare men vs women; separate panels by education)
+ggplot(total_activity, aes(x = age, y = total_mims, color = sex)) +
+  geom_point(alpha = 0.5, size = 1.3) +
+  geom_smooth(se = FALSE, method = "loess", span = 0.9) +
+  facet_wrap(~ education, nrow = 1, scales = "free_y") +
+  scale_color_discrete(name = "Sex") +
+  labs(title = "Total Daily Activity vs Age by Education",
+       x = "Age (years)", y = "Total MIMS (sum over 24h)") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top")
+
+
+```
+Total daily activity generally declines with age across all education groups, with the steepest drop after about 65–70 years. In the < high school panel, both sexes show a strong negative age trend, and activity converges to low levels in older ages. For the high school equivalent group, women display a midlife peak (≈35–45) and remain above men through mid-age; both sexes then fall toward ~10k MIMS by late adulthood. In the more than high school group, activity is relatively high and flat through ~30–60 (women slightly higher on average) before declining in older ages; variability is larger at younger ages. Overall, sex differences are modest but tend to favor women in midlife, while education seems associated with higher and more stable activity before old age.
+
+```{r}
+#Question 3: 24-hour activity time courses
+
+## Aggregate minute profiles for clarity (mean or median across people)
+minute_profiles <- nhanes_long %>%
+  group_by(education, sex, minute) %>%
+  summarise(mean_mims = mean(MIMS, na.rm = TRUE), .groups = "drop")
+
+## Smooth time courses by education, color by sex
+ggplot(minute_profiles, aes(x = minute, y = mean_mims, color = sex)) +
+  geom_line(alpha = 0.5) +
+  geom_smooth(se = FALSE, span = 0.1, linewidth = 1) +
+  facet_wrap(~ education, ncol = 1, scales = "free_y") +
+  scale_color_discrete(name = "Sex") +
+  labs(title = "24-hour Activity Profiles by Education and Sex",
+       x = "Minute of the day (1–1440)", y = "Mean MIMS") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top")
+
+```
+Across all education groups, activity is near zero overnight, ramps up sharply around minute ~300–400 (~5–7am), reaches a broad midday plateau around minute ~600–900 (~10am–3pm), and then tapers into the evening. The education gradient is clear: those with more than high school show the highest daytime levels and the steepest morning rise, while the < high school group has a lower plateau and earlier evening decline. Sex differences are modest—women tend to be slightly higher through the midday period in the High school-equivalent and >High school panels, with little separation in the <High school panel. Overall, the diurnal shape is consistent, but the amplitude of activity increases with education.
