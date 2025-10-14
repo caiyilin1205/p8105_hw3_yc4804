@@ -157,6 +157,7 @@ cat("ZIPs observed 116 times:", n_full_116, "\n")
 cat("ZIPs observed < 10 times:", n_lt_10, "\n")
 
 ```
+
 Some ZIP codes show up every month because they’re stable, residential areas with enough active rental listings for Zillow to compute ZORI continuously. ZIPs that appear only rarely are often PO-box or non-residential ZIPs, newly created/retired or boundary-changed ZIPs, or places with very sparse rental stock where values are suppressed or can’t be reliably estimated. Occasional data gaps or insufficient listings in particular months can also produce spotty coverage.
 
 ```{r}
@@ -175,6 +176,7 @@ kable(avg_boro_year, caption = "Average ZORI ($) by County and Year", align = "c
 
 
 ```
+
 The table shows a clear and persistent price gradient: New York (Manhattan) is highest every year, followed by Kings (Brooklyn), then Queens, with Bronx and Richmond (Staten Island) lowest. All boroughs dip or flatten around 2020–2021 (pandemic period) and then rebound strongly in 2022–2024, with Manhattan surpassing $4,000 by 2024. Brooklyn and Queens also rise to new highs by 2024, while Bronx and Richmond increase more modestly and remain below the citywide leaders. Richmond is missing earlier years (coverage gap) but, where observed (2020+), tracks just above the Bronx and below Queens.
 
 ```{r}
@@ -202,6 +204,7 @@ p1
 
 
 ```
+
 The time-series makes the borough gradient unmistakable: New York (Manhattan) is highest throughout, Kings (Brooklyn) next, then Queens, with Bronx and Richmond (Staten Island) lowest. All five show a pandemic dip around 2020–2021, most pronounced in Manhattan, followed by a strong rebound from 2022 onward—Manhattan surpasses $4k by 2024 while others also reach new highs. Richmond enters later (coverage begins around 2021) and tracks just above the Bronx. Early volatility in the Bronx likely reflects sparse ZIP coverage; otherwise the series are smooth and clearly separated, facilitating cross-borough comparison.
 
 
@@ -230,6 +233,7 @@ p_zip_dist_2023 <- ggplot(zip_2023_avg, aes(borough, avg_2023)) +
 p_zip_dist_2023
 
 ```
+
 The 2023 ZIP-level distributions line up as expected: New York (Manhattan) is highest and most variable, with a wide IQR and several high outliers (> $6k–$7k). Kings (Brooklyn) sits next with a moderate spread, followed by Queens in the mid-$2k range with a tighter IQR but a few high outliers (~$4k). Bronx and Richmond (Staten Island) are lowest; Richmond’s box is especially narrow, suggesting little within-county variation (and/or fewer ZIPs). Overall, both the level and the spread of rents decline as you move from Manhattan → Brooklyn → Queens → Bronx/Richmond.
 
 ```{r}
@@ -363,6 +367,7 @@ ggplot(age_dist, aes(x = age, fill = sex)) +
   theme(legend.position = "top")
 
 ```
+
 A quick read of the figure shows clear age shifts across education levels. In the < high school group, both men and women skew older, with most density in the late 60s–70s. The high school equivalent group is broader; men look slightly bimodal (30s and 60s), while women lean older (mid-50s to 70s). In more than high school, women skew younger with a prominent peak in the 30s, whereas men are more evenly spread into later adulthood. Despite these shifts, the sexes overlap substantially within each education category.
 
 ```{r}
@@ -385,6 +390,7 @@ ggplot(total_activity, aes(x = age, y = total_mims, color = sex)) +
 
 
 ```
+
 Total daily activity generally declines with age across all education groups, with the steepest drop after about 65–70 years. In the < high school panel, both sexes show a strong negative age trend, and activity converges to low levels in older ages. For the high school equivalent group, women display a midlife peak (≈35–45) and remain above men through mid-age; both sexes then fall toward ~10k MIMS by late adulthood. In the more than high school group, activity is relatively high and flat through ~30–60 (women slightly higher on average) before declining in older ages; variability is larger at younger ages. Overall, sex differences are modest but tend to favor women in midlife, while education seems associated with higher and more stable activity before old age.
 
 ```{r}
@@ -407,4 +413,5 @@ ggplot(minute_profiles, aes(x = minute, y = mean_mims, color = sex)) +
   theme(legend.position = "top")
 
 ```
+
 Across all education groups, activity is near zero overnight, ramps up sharply around minute ~300–400 (~5–7am), reaches a broad midday plateau around minute ~600–900 (~10am–3pm), and then tapers into the evening. The education gradient is clear: those with more than high school show the highest daytime levels and the steepest morning rise, while the < high school group has a lower plateau and earlier evening decline. Sex differences are modest—women tend to be slightly higher through the midday period in the High school-equivalent and >High school panels, with little separation in the <High school panel. Overall, the diurnal shape is consistent, but the amplitude of activity increases with education.
