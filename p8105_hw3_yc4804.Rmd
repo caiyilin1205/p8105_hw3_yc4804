@@ -157,6 +157,7 @@ cat("ZIPs observed 116 times:", n_full_116, "\n")
 cat("ZIPs observed < 10 times:", n_lt_10, "\n")
 
 ```
+Some ZIP codes show up every month because they’re stable, residential areas with enough active rental listings for Zillow to compute ZORI continuously. ZIPs that appear only rarely are often PO-box or non-residential ZIPs, newly created/retired or boundary-changed ZIPs, or places with very sparse rental stock where values are suppressed or can’t be reliably estimated. Occasional data gaps or insufficient listings in particular months can also produce spotty coverage.
 
 ```{r}
 #Q2) Reader-friendly table: average rental price by county*year
@@ -174,6 +175,8 @@ kable(avg_boro_year, caption = "Average ZORI ($) by County and Year", align = "c
 
 
 ```
+The table shows a clear and persistent price gradient: New York (Manhattan) is highest every year, followed by Kings (Brooklyn), then Queens, with Bronx and Richmond (Staten Island) lowest. All boroughs dip or flatten around 2020–2021 (pandemic period) and then rebound strongly in 2022–2024, with Manhattan surpassing $4,000 by 2024. Brooklyn and Queens also rise to new highs by 2024, while Bronx and Richmond increase more modestly and remain below the citywide leaders. Richmond is missing earlier years (coverage gap) but, where observed (2020+), tracks just above the Bronx and below Queens.
+
 ```{r}
 
 #Q3) Plot: NYC rental prices over time (facilitates county comparisons)
@@ -197,10 +200,11 @@ p1 <- ggplot(boro_month_median, aes(date, median_zori, color = borough)) +
 
 p1
 
-# Comment: 
-# Clear separation persists (New York > Kings > Queens > Bronx/Richmond) with a notable post-2021 rise.
 
 ```
+The time-series makes the borough gradient unmistakable: New York (Manhattan) is highest throughout, Kings (Brooklyn) next, then Queens, with Bronx and Richmond (Staten Island) lowest. All five show a pandemic dip around 2020–2021, most pronounced in Manhattan, followed by a strong rebound from 2022 onward—Manhattan surpasses $4k by 2024 while others also reach new highs. Richmond enters later (coverage begins around 2021) and tracks just above the Bronx. Early volatility in the Bronx likely reflects sparse ZIP coverage; otherwise the series are smooth and clearly separated, facilitating cross-borough comparison.
+
+
 ```{r}
 #Q4) 2023 ZIP-level averages + distribution plot across counties
 county_order <- c("New York","Kings","Queens","Bronx","Richmond")
@@ -213,7 +217,6 @@ zip_2023_avg <- zori_long %>%
 
 # Reader-friendly distribution plot across boroughs
 p_zip_dist_2023 <- ggplot(zip_2023_avg, aes(borough, avg_2023)) +
-  geom_violin(trim = FALSE, alpha = 0.25, linewidth = 0.2) +
   geom_boxplot(width = 0.18, outlier.alpha = 0.25) +
   stat_summary(fun = "mean", geom = "point", shape = 21, size = 2.2, fill = "red")  +
   labs(
@@ -225,10 +228,9 @@ p_zip_dist_2023 <- ggplot(zip_2023_avg, aes(borough, avg_2023)) +
   theme(legend.position = "none")
 
 p_zip_dist_2023
-# Comment:
-# New York (Manhattan) and Kings (Brooklyn) have the highest medians and widest upper tails, indicating more expensive and variable ZIPs; Queens is intermediate; Bronx and Richmond (Staten Island) show lower medians and tighter spreads.
 
 ```
+The 2023 ZIP-level distributions line up as expected: New York (Manhattan) is highest and most variable, with a wide IQR and several high outliers (> $6k–$7k). Kings (Brooklyn) sits next with a moderate spread, followed by Queens in the mid-$2k range with a tighter IQR but a few high outliers (~$4k). Bronx and Richmond (Staten Island) are lowest; Richmond’s box is especially narrow, suggesting little within-county variation (and/or fewer ZIPs). Overall, both the level and the spread of rents decline as you move from Manhattan → Brooklyn → Queens → Bronx/Richmond.
 
 ```{r}
 #Q5: combine two plots
